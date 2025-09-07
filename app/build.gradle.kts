@@ -51,12 +51,19 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.storage.ktx)
+    implementation(libs.firebase.appcheck.playintegrity)
+
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.analytics)
+    implementation(libs.play.services.location)
 
 
     implementation(libs.androidx.room.runtime)
@@ -89,7 +96,7 @@ dependencies {
     implementation(libs.cloudinary.android)
     implementation(libs.pdfbox.android)
     implementation("io.coil-kt:coil-compose:2.3.0")
-    implementation("com.google.code.gson:gson:2.8.9")
+    implementation("com.google.code.gson:gson:2.13.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

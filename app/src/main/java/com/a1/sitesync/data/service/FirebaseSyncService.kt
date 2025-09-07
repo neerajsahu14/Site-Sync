@@ -1,7 +1,9 @@
 package com.a1.sitesync.data.service
 
+import android.net.Uri
 import com.a1.sitesync.data.models.FirestoreSurvey
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import java.io.File
 
@@ -11,16 +13,18 @@ import java.io.File
  * modularity and making the code easier to test and maintain.
  */
 class FirebaseSyncService(
-    private val cloudinaryService: CloudinarySyncService
+    private val storage: FirebaseStorage
 ) {
-    // Get instances of Firestore and Cloud Storage.
     private val firestoreDb = FirebaseFirestore.getInstance()
 
     /**
-     * Uploads a file to Cloudinary via CloudinarySyncService
+     * Uploads a file to Firebase Storage
      */
     suspend fun uploadFile(localFile: File, surveyId: String): String {
-        return cloudinaryService.uploadFile(localFile, surveyId)
+        val fileUri = Uri.fromFile(localFile)
+        val storageRef = storage.reference.child("surveys/$surveyId/${localFile.name}")
+        val uploadTask = storageRef.putFile(fileUri).await()
+        return uploadTask.storage.downloadUrl.await().toString()
     }
 
     /**

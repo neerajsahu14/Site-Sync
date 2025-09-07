@@ -1,35 +1,27 @@
 package com.a1.sitesync.ui.screen
 
-import android.Manifest
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.a1.sitesync.ui.viewmodel.SiteSyncViewModel
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.camera.view.PreviewView
+import java.util.Objects
 
-/**
- * Camera Screen: Capture site photos.
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
     onNext: (String) -> Unit,
@@ -37,63 +29,46 @@ fun CameraScreen(
     viewModel: SiteSyncViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
-    // Request camera permission
-    LaunchedEffect(Unit) {
-        ActivityCompat.requestPermissions(
-            context as android.app.Activity,
-            arrayOf(Manifest.permission.CAMERA), 0
-        )
-    }
-    val imageCapture = remember { ImageCapture.Builder().build() }
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-    AndroidView({ PreviewView(context) }) { previewView ->
-        cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-            try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    context as androidx.lifecycle.LifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview,
-                    imageCapture
-                )
-            } catch (_: Exception) {
-                // handle error
-            }
-        }, ContextCompat.getMainExecutor(context))
-    }
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Capture Photo") }) },
-        content = { padding ->
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Button(onClick = {
-                    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                        .format(System.currentTimeMillis())
-                    val photoFile = File(
-                        context.filesDir,
-                        "IMG_${surveyId}_$timestamp.jpg"
-                    )
-                    val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                    imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(context),
-                        object : ImageCapture.OnImageSavedCallback {
-                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                viewModel.addPhotoToSurvey(surveyId, photoFile.absolutePath)
-                                onNext(surveyId)
-                            }
-                            override fun onError(exception: ImageCaptureException) {
-                                // handle error
-                            }
-                        }
-                    )
-                }) {
-                    Text("Capture")
+    var hasImage by remember { mutableStateOf(false) }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageFile by remember { mutableStateOf<File?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+        onResult = { success ->
+            hasImage = success
+            if (success) {
+                imageFile?.let {
+                    viewModel.addPhotoToSurvey(surveyId, it.absolutePath)
+                    onNext(surveyId)
                 }
             }
         }
     )
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Button(onClick = {
+            val file = context.createImageFile(surveyId)
+            val uri = FileProvider.getUriForFile(
+                Objects.requireNonNull(context),
+                "com.a1.sitesync.provider", // Make sure this matches your FileProvider authority
+                file
+            )
+            imageFile = file
+            imageUri = uri
+            cameraLauncher.launch(uri)
+        }) {
+            Text("Open Camera")
+        }
+    }
+}
+
+private fun Context.createImageFile(surveyId: String): File {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val imageFileName = "IMG_${surveyId}_${timeStamp}"
+    return File(filesDir, "$imageFileName.jpg")
 }

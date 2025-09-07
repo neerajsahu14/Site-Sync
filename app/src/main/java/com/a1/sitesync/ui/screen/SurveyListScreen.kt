@@ -17,14 +17,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.a1.sitesync.R
 import com.a1.sitesync.ui.viewmodel.SiteSyncViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.androidx.compose.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
-import com.a1.sitesync.R
 
 /**
  * Survey List Screen: Shows all surveys and allows starting new ones.
@@ -34,6 +35,7 @@ import com.a1.sitesync.R
 fun SurveyListScreen(
     onAddNew: () -> Unit,
     onItemClick: (String) -> Unit,
+    onSyncClick: (String) -> Unit,
     viewModel: SiteSyncViewModel = koinViewModel()
 ) {
     val surveys = viewModel.surveys.collectAsState()
@@ -44,7 +46,7 @@ fun SurveyListScreen(
                 title = { Text("SiteSync Surveys") },
                 actions = {
                     IconButton(onClick = { viewModel.syncData() }) {
-                        Icon(painterResource(R.drawable.baseline_cloud_queue_24), contentDescription = "Sync")
+                        Icon(painterResource(R.drawable.baseline_cloud_queue_24), contentDescription = "Sync All")
                     }
                 }
             )
@@ -67,9 +69,10 @@ fun SurveyListScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(item.survey.clientName)
                             Text(
                                 item.survey.siteAddress ?: "",
@@ -81,10 +84,15 @@ fun SurveyListScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        if (item.survey.isSynced) {
-                            Icon(painterResource(R.drawable.baseline_cloud_done_24), contentDescription = "Synced")
-                        } else {
-                            Icon(painterResource(R.drawable.baseline_cloud_off_24), contentDescription = "Unsynced")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (item.survey.isSynced) {
+                                Icon(painterResource(R.drawable.baseline_cloud_done_24), contentDescription = "Synced")
+                            } else {
+                                Icon(painterResource(R.drawable.baseline_cloud_off_24), contentDescription = "Unsynced")
+                            }
+                            IconButton(onClick = { onSyncClick(item.survey.surveyId) }) {
+                                Icon(painterResource(id = R.drawable.outline_cloud_sync_24), contentDescription = "Sync Survey")
+                            }
                         }
                     }
                 }

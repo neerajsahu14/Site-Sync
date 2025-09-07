@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import com.a1.sitesync.data.repository.SiteSyncRepository
+import org.koin.java.KoinJavaComponent.inject
 import java.util.Date
 
 class FirebaseSyncViewModel(

@@ -11,25 +11,20 @@ import com.a1.sitesync.data.models.SurveyDimensions
 import com.a1.sitesync.data.models.SurveyPhoto
 import com.a1.sitesync.data.models.SurveyProvisions
 import com.a1.sitesync.data.service.FirebaseSyncService
+import com.google.firebase.firestore.GeoPoint
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.util.Date
 import java.util.UUID
 
-/**
- * The Repository now orchestrates data flow between the local Room DB
- * and the remote Firebase services.
- *
- * @param surveyDao The Data Access Object for surveys.
- * @param firebaseService The service for Firebase communications.
- */
 class SiteSyncRepository(
     private val surveyDao: SurveyDao,
     private val firebaseService: FirebaseSyncService,
     private val firebaseSyncRepository: FirebaseSyncRepository
 ) {
+
     suspend fun createNewSurvey(
-        // ... (same parameters as before)
         surveyorId: String,
         clientName: String,
         siteAddress: String?,
@@ -38,24 +33,25 @@ class SiteSyncRepository(
         provisions: Provisions,
         openingDirection: String?,
         recommendedGate: String?,
-        photoPaths: List<String>
-    ) {
-        // ... (same implementation as before to save locally)
-        val newSurveyId = UUID.randomUUID().toString()
+        photoPaths: List<String>,
+        latitude: Double?,
+        longitude: Double?
+    ): String {
 
+        val newSurveyId = UUID.randomUUID().toString()
         val survey = Survey(
             surveyId = newSurveyId,
             surveyorId = surveyorId,
             clientName = clientName,
             siteAddress = siteAddress,
-            latitude = null,
-            longitude = null,
+            latitude = latitude,
+            longitude = longitude,
             gateType = gateType,
             dimensions = dimensions,
             provisions = provisions,
             openingDirection = openingDirection,
             recommendedGate = recommendedGate,
-            status = "Completed",
+            status = "pending",
             isSynced = false,
             createdAt = Date()
         )
@@ -70,76 +66,68 @@ class SiteSyncRepository(
                 capturedAt = Date()
             )
         }
-
         surveyDao.insertSurveyWithPhotos(survey, photos)
+        return newSurveyId
     }
 
-    /**
-     * Performs a full bi-directional data sync.
-     */
     suspend fun performDataSync() {
-        // 1. Upstream Sync (Local -> Cloud)
         uploadUnsyncedSurveys()
-
-        // 2. Downstream Sync (Cloud -> Local)
         downloadRemoteSurveys()
     }
 
-    /**
-     * Handles the upload of locally created/updated surveys to Firebase.
-     */
+    suspend fun syncSurveyById(surveyId: String) {
+        val surveyWithPhotos = surveyDao.getSurveyById(surveyId).first()
+        uploadSurvey(surveyWithPhotos)
+    }
+
     private suspend fun uploadUnsyncedSurveys() {
         val unsyncedSurveys = surveyDao.getUnsyncedSurveys()
-
         unsyncedSurveys.forEach { surveyWithPhotos ->
-            val survey = surveyWithPhotos.survey
-            val photos = surveyWithPhotos.photos
-
-            // 1. Upload all photos for the survey to Cloud Storage
-            val uploadedPhotos = photos.map { photo ->
-                val localFile = File(photo.localFilePath)
-                val cloudUrl = firebaseService.uploadFile(localFile, survey.surveyId)
-                SurveyPhoto(
-                    photoId = photo.photoId,
-                    cloudStorageUrl = cloudUrl,
-                    isSuperimposed = photo.isSuperimposed
-                    // 'capturedAt' will be set by server timestamp
-                )
-            }
-
-            // 2. Prepare the Firestore document
-            val firestoreSurvey = FirestoreSurvey(
-                surveyId = survey.surveyId,
-                surveyorId = survey.surveyorId,
-                clientName = survey.clientName,
-                siteAddress = survey.siteAddress,
-                gateType = survey.gateType,
-                dimensions = SurveyDimensions(
-                    clearOpeningWidth = survey.dimensions.clearOpeningWidth,
-                    requiredHeight = survey.dimensions.requiredHeight,
-                    parkingSpaceLength = survey.dimensions.parkingSpaceLength,
-                    openingAngleLeaf = survey.dimensions.openingAngleLeaf
-                ),
-                provisions = SurveyProvisions(
-                    hasCabling = survey.provisions.hasCabling,
-                    hasStorage = survey.provisions.hasStorage
-                ),
-                openingDirection = survey.openingDirection,
-                recommendedGate = survey.recommendedGate,
-                photos = uploadedPhotos
-            )
-
-            // 3. Upload the document to Firestore
-            firebaseService.uploadSurveyDocument(firestoreSurvey)
-
-            // 4. Mark the local survey as synced
-            surveyDao.markSurveyAsSynced(survey.surveyId)
+            uploadSurvey(surveyWithPhotos)
         }
     }
 
-    /**
-     * Fetches surveys from Firestore and updates local DB
-     */
+    private suspend fun uploadSurvey(surveyWithPhotos: SurveyWithPhotos) {
+        val survey = surveyWithPhotos.survey
+        val photos = surveyWithPhotos.photos
+
+        val uploadedPhotos = photos.map { photo ->
+            val localFile = File(photo.localFilePath)
+            val cloudUrl = firebaseService.uploadFile(localFile, survey.surveyId)
+            SurveyPhoto(
+                photoId = photo.photoId,
+                cloudStorageUrl = cloudUrl,
+                isSuperimposed = photo.isSuperimposed,
+                capturedAt = photo.capturedAt
+            )
+        }
+
+        val firestoreSurvey = FirestoreSurvey(
+            surveyId = survey.surveyId,
+            surveyorId = survey.surveyorId,
+            clientName = survey.clientName,
+            siteAddress = survey.siteAddress,
+            location = if (survey.latitude != null && survey.longitude != null) GeoPoint(survey.latitude, survey.longitude) else null,
+            gateType = survey.gateType,
+            dimensions = SurveyDimensions(
+                clearOpeningWidth = survey.dimensions.clearOpeningWidth,
+                requiredHeight = survey.dimensions.requiredHeight,
+                parkingSpaceLength = survey.dimensions.parkingSpaceLength,
+                openingAngleLeaf = survey.dimensions.openingAngleLeaf
+            ),
+            provisions = SurveyProvisions(
+                hasCabling = survey.provisions.hasCabling,
+                hasStorage = survey.provisions.hasStorage
+            ),
+            openingDirection = survey.openingDirection,
+            recommendedGate = survey.recommendedGate,
+            photos = uploadedPhotos
+        )
+
+        firebaseService.uploadSurveyDocument(firestoreSurvey)
+        surveyDao.markSurveyAsSynced(survey.surveyId)
+    }
+
     private suspend fun downloadRemoteSurveys() {
         val remoteSurveys = firebaseService.fetchAllSurveys()
         remoteSurveys.forEach { fs ->
@@ -171,17 +159,16 @@ class SiteSyncRepository(
                 Photo(
                     photoId = sp.photoId,
                     surveyIdRef = fs.surveyId,
-                    localFilePath = "", // Remote photos, no local file
+                    localFilePath = "",
                     cloudStorageUrl = sp.cloudStorageUrl,
                     isSuperimposed = sp.isSuperimposed,
-                    capturedAt = sp.capturedAt ?: Date()
+                    capturedAt = sp.capturedAt
                 )
             }
             surveyDao.insertSurveyWithPhotos(survey, photos)
         }
     }
 
-    /** CRUD operations (OFFLINE - Room) **/
     fun getAllSurveys(): Flow<List<SurveyWithPhotos>> = surveyDao.getAllSurveys()
 
     fun getSurveyById(surveyId: String): Flow<SurveyWithPhotos> = surveyDao.getSurveyById(surveyId)
@@ -190,7 +177,6 @@ class SiteSyncRepository(
 
     suspend fun deleteSurvey(survey: Survey) = surveyDao.deleteSurvey(survey)
 
-    /** CRUD operations (ONLINE - Firestore) **/
     suspend fun upsertSurveyOnline(firestoreSurvey: FirestoreSurvey) =
         firebaseSyncRepository.upsertSurvey(firestoreSurvey)
 
@@ -203,9 +189,6 @@ class SiteSyncRepository(
     suspend fun deleteSurveyOnline(surveyId: String) =
         firebaseSyncRepository.deleteSurvey(surveyId)
 
-    /**
-     * Adds a photo entry to an existing survey.
-     */
     suspend fun addPhotoToSurvey(surveyId: String, localFilePath: String) {
         val photo = Photo(
             photoId = UUID.randomUUID().toString(),

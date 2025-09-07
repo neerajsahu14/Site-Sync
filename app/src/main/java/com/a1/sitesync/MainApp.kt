@@ -4,7 +4,11 @@ import android.app.Application
 import androidx.room.Room
 import com.a1.sitesync.data.database.AppDatabase
 import com.a1.sitesync.di.appModule
-import com.cloudinary.android.MediaManager
+import com.a1.sitesync.di.authModule
+import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -27,16 +31,22 @@ class MainApp : Application() {
             AppDatabase::class.java,
             "site_sync_db"
         ).build()
+
+        // Initialize PDFBox
+        PDFBoxResourceLoader.init(applicationContext)
+
+        // Initialize Firebase and App Check
+        FirebaseApp.initializeApp(this)
+        val firebaseAppCheck = FirebaseAppCheck.getInstance()
+        firebaseAppCheck.installAppCheckProviderFactory(
+            PlayIntegrityAppCheckProviderFactory.getInstance()
+        )
+
+        // Initialize Koin
         startKoin {
             androidLogger()
             androidContext(this@MainApp)
-            modules(appModule)
+            modules(appModule, authModule)
         }
-        val config = mapOf(
-            "cloud_name" to "YOUR_CLOUD_NAME",
-            "api_key" to "YOUR_API_KEY",
-            "api_secret" to "YOUR_API_SECRET"
-        )
-        MediaManager.init(this, config)
     }
 }
