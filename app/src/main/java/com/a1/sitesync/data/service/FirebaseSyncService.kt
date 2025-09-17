@@ -21,15 +21,9 @@ class FirebaseSyncService(
         return uploadTask.storage.downloadUrl.await().toString()
     }
 
-    /**
-     * Downloads a file from the given Cloud Storage URL to local app storage.
-     *
-     * @param fileUrl The public URL of the file to download.
-     * @return The local File object where the file was saved.
-     */
     suspend fun downloadFile(fileUrl: String): File {
         val httpsReference = storage.getReferenceFromUrl(fileUrl)
-        val localFile = File(context.filesDir, "${UUID.randomUUID()}.jpg")
+        val localFile = File(context.externalCacheDir, "${UUID.randomUUID()}.jpg")
         httpsReference.getFile(localFile).await()
         return localFile
     }
@@ -44,5 +38,14 @@ class FirebaseSyncService(
     suspend fun fetchAllSurveys(): List<FirestoreSurvey> {
         val snapshot = firestoreDb.collection("surveys").get().await()
         return snapshot.documents.mapNotNull { it.toObject(FirestoreSurvey::class.java) }
+    }
+
+    /**
+     * Fetches only the IDs of all surveys from Cloud Firestore.
+     * This is more efficient than fetching the entire documents.
+     */
+    suspend fun fetchAllSurveyIds(): List<String> {
+        val snapshot = firestoreDb.collection("surveys").get().await()
+        return snapshot.documents.map { it.id }
     }
 }

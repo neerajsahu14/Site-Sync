@@ -47,10 +47,8 @@ fun CameraScreen(
         contract = ActivityResultContracts.TakePicture(),
         onResult = { success ->
             if (success) {
-                tempImageUri?.let { uri ->
-                    // The URI from TakePicture is the one we created, pointing to our file.
-                    // We just need to get the path from the URI we stored.
-                    val file = context.getFileFromUri(uri)
+                tempImageUri?.let {
+                    val file = context.getFileFromUri(it)
                     viewModel.addPhotoToSurvey(surveyId, file.absolutePath)
                     onNext(surveyId)
                 }
@@ -141,13 +139,12 @@ private fun Context.createImageFileUri(surveyId: String): Uri {
 private fun Context.createImageFile(surveyId: String): File {
     val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     val imageFileName = "IMG_${surveyId}_${timeStamp}.jpg"
-    return File(this.filesDir, imageFileName)
+    // Use external cache dir to be consistent with FileProvider paths
+    return File(this.externalCacheDir, imageFileName)
 }
 
 private fun Context.getFileFromUri(uri: Uri): File {
-    // This is a simplified way for FileProvider URIs. A more robust solution
-    // would handle different URI schemes.
-    return File(this.filesDir, uri.path!!.substringAfterLast('/'))
+    return File(this.externalCacheDir, uri.path!!.substringAfterLast('/'))
 }
 
 private fun Context.createFileFromContentUri(contentUri: Uri, surveyId: String): File {

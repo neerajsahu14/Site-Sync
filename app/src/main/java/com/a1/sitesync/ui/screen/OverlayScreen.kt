@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -75,6 +76,9 @@ fun OverlayScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { overlayViewModel.resetTransformations() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                    }
                     IconButton(onClick = {
                         coroutineScope.launch {
                             if (backgroundPhoto != null && selectedGate != null) {
@@ -216,8 +220,8 @@ private suspend fun createOverlayedImage(
     canvas.drawBitmap(overlayBitmap, 0f, 0f, null)
     canvas.restore()
 
-    // Save the file
-    val file = File(context.cacheDir, "OVERLAY_${UUID.randomUUID()}.jpg")
+    // Save the file to the external cache directory to match FileProvider paths
+    val file = File(context.externalCacheDir, "OVERLAY_${UUID.randomUUID()}.jpg")
     FileOutputStream(file).use {
         backgroundBitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)
     }

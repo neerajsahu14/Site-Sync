@@ -8,35 +8,36 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * A CoroutineWorker responsible for performing the bi-directional data synchronization.
- * WorkManager will execute this task in the background, respecting battery optimizations
- * and retrying on failure.
- *
- * @param appContext The application context.
- * @param workerParams Parameters for the worker.
+ * A background worker that syncs a single survey to the cloud.
+ * This worker is designed to be triggered by WorkManager.
  */
-class SyncWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(appContext, workerParams), KoinComponent {
+class SyncWorker(appContext: Context, workerParams: WorkerParameters) :
+    CoroutineWorker(appContext, workerParams), KoinComponent {
 
-    // Inject repository via Koin
-    private val repository: SiteSyncRepository by inject()
+    // Inject the repository using Koin
+    private val siteSyncRepository: SiteSyncRepository by inject()
+
+    companion object {
+        const val KEY_SURVEY_ID = "KEY_SURVEY_ID"
+    }
 
     override suspend fun doWork(): Result {
+        // Get the survey ID from the input data
+        val surveyId = inputData.getString(KEY_SURVEY_ID)
+
         return try {
-            // Perform the full synchronization logic
-            repository.performDataSync()
+            if (surveyId.isNullOrBlank()) {
+                // If no specific survey ID, perform a full data sync.
+                siteSyncRepository.performDataSync()
+            } else {
+                // If a specific survey ID is provided, sync only that survey.
+                siteSyncRepository.syncSurveyById(surveyId)
+            }
             Result.success()
         } catch (e: Exception) {
-            // If any part of the sync fails, retry the work later
+            e.printStackTrace()
+            // If there's an error, retry the work later
             Result.retry()
         }
     }
 }
-
-// Placeholder for your Application class where you'd initialize the database
-// and potentially WorkManager scheduling.
-// abstract class YourApplicationClass : android.app.Application() {
-//     abstract val database: YourAppDatabase
-// }

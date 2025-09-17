@@ -2,7 +2,6 @@ package com.a1.sitesync.data.repository
 
 import com.a1.sitesync.R
 import com.a1.sitesync.data.models.Gate
-import org.koin.core.qualifier.named
 
 /**
  * A repository that provides a static list of gate designs from local drawable resources.
@@ -18,7 +17,6 @@ class LocalGateRepository {
      */
     fun getLocalGates(): List<Gate> {
         return listOf(
-            // Example:
              Gate(name = "Classic Spear", imageResourceId = R.drawable.doorone),
              Gate(name = "Modern Slat", imageResourceId = R.drawable.doortwo),
             Gate(name = "Wooden Gate", imageResourceId = R.drawable.doorthree),

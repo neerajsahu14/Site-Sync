@@ -40,7 +40,7 @@ val appModule = module {
     single { FirebaseSyncRepository() } // Assuming this has a no-arg constructor
 
     // Repositories
-    single { SiteSyncRepository(androidContext(), get(), get(), get()) }
+    single { SiteSyncRepository(androidContext(), get(), get()) }
     single { LocalGateRepository() }
 
     // ViewModels

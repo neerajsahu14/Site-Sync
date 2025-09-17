@@ -14,10 +14,9 @@ import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -25,8 +24,36 @@ class SiteSyncViewModel(
     private val repository: SiteSyncRepository
 ) : ViewModel() {
 
-    val surveys: StateFlow<List<SurveyWithPhotos>> = repository.getAllSurveys()
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    private val _surveys = MutableStateFlow<List<SurveyWithPhotos>>(emptyList())
+    val surveys: StateFlow<List<SurveyWithPhotos>> = _surveys.asStateFlow()
+
+    private var currentPage = 0
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private var isLastPage = false
+
+    companion object {
+        private const val PAGE_SIZE = 10
+    }
+
+    init {
+        loadMoreSurveys()
+    }
+
+    fun loadMoreSurveys() {
+        if (_isLoading.value || isLastPage) return
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            currentPage++
+            val newSurveys = repository.getPagedSurveys(page = currentPage, pageSize = PAGE_SIZE)
+            if (newSurveys.size < PAGE_SIZE) {
+                isLastPage = true
+            }
+            _surveys.value = _surveys.value + newSurveys
+            _isLoading.value = false
+        }
+    }
 
     fun getSurvey(id: String) = repository.getSurveyById(id)
 
@@ -78,14 +105,12 @@ class SiteSyncViewModel(
             val survey = surveyWithPhotos.survey
             val doc = PDDocument()
 
-            // Create a page with survey details
             val detailsPage = PDPage(PDRectangle.A4)
             doc.addPage(detailsPage)
             val contentStream = PDPageContentStream(doc, detailsPage)
 
             var yPosition = 750f
 
-            // Title
             contentStream.beginText()
             contentStream.setFont(PDType1Font.HELVETICA_BOLD, 18f)
             contentStream.newLineAtOffset(150f, yPosition)
@@ -93,7 +118,6 @@ class SiteSyncViewModel(
             contentStream.endText()
             yPosition -= 50f
 
-            // Helper to add a line of text
             fun addTextLine(label: String, value: String?) {
                 contentStream.beginText()
                 contentStream.setFont(PDType1Font.HELVETICA, 12f)
@@ -103,7 +127,6 @@ class SiteSyncViewModel(
                 yPosition -= 20f
             }
 
-            // Survey Details
             addTextLine("Client Name", survey.clientName)
             addTextLine("Site Address", survey.siteAddress)
             addTextLine("Gate Type", survey.gateType)
@@ -118,7 +141,6 @@ class SiteSyncViewModel(
 
             contentStream.close()
 
-            // Add photos on separate pages
             surveyWithPhotos.photos.forEach { photo ->
                 val imgFile = File(photo.localFilePath)
                 if (imgFile.exists()) {
@@ -126,7 +148,7 @@ class SiteSyncViewModel(
                     val page = PDPage(PDRectangle.A4)
                     doc.addPage(page)
                     val imageContentStream = PDPageContentStream(doc, page)
-                    val scale = 0.4f // Adjust scale to fit the page
+                    val scale = 0.4f
                     val imgWidth = pdImage.width * scale
                     val imgHeight = pdImage.height * scale
                     val x = (page.mediaBox.width - imgWidth) / 2

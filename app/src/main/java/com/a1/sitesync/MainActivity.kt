@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -53,6 +54,12 @@ fun SiteSyncNavHost(
     val startDestination = if (authRepository.getCurrentUser() != null) "list" else "auth"
     val siteSyncViewModel: SiteSyncViewModel = koinViewModel()
 
+    if (startDestination == "list") {
+        LaunchedEffect(Unit) {
+            siteSyncViewModel.syncData()
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -65,8 +72,7 @@ fun SiteSyncNavHost(
             SurveyListScreen(
                 onAddNew = { navController.navigate("form/new") },
                 onItemClick = { id -> navController.navigate("details/$id") },
-                onEditClick = { id -> navController.navigate("form/$id") },
-                onSyncClick = { surveyId -> siteSyncViewModel.syncSurveyById(surveyId) }
+                onEditClick = { id -> navController.navigate("form/$id") }
             )
         }
         composable("form") {

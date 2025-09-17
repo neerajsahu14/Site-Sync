@@ -10,7 +10,7 @@ class SiteSyncService(
     private val repository: SiteSyncRepository
 ) {
     // OFFLINE (Room)
-    fun getAllSurveys(): Flow<List<SurveyWithPhotos>> = repository.getAllSurveys()
+    suspend fun getAllSurveys(): Flow<List<SurveyWithPhotos>> = repository.getAllSurveys() as Flow<List<SurveyWithPhotos>>
     fun getSurveyById(surveyId: String): Flow<SurveyWithPhotos> = repository.getSurveyById(surveyId)
     suspend fun updateSurvey(survey: Survey) = repository.updateSurvey(survey)
     suspend fun deleteSurvey(survey: Survey) = repository.deleteSurvey(survey)
