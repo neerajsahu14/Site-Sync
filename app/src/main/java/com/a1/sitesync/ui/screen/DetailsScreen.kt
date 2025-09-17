@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -20,7 +22,6 @@ import androidx.core.content.FileProvider
 import coil.compose.rememberAsyncImagePainter
 import com.a1.sitesync.R
 import com.a1.sitesync.ui.viewmodel.SiteSyncViewModel
-import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 
@@ -28,12 +29,14 @@ import java.io.File
 @Composable
 fun DetailsScreen(
     surveyId: String,
+    onModifyClick: (String) -> Unit,
+    onPhotoClick: (String, String) -> Unit,
+    onOverlaidPhotoClick: (List<String>, Int) -> Unit,
     viewModel: SiteSyncViewModel = koinViewModel()
 ) {
     val surveyState = viewModel.getSurvey(surveyId).collectAsState(initial = null)
     val surveyWithPhotos = surveyState.value
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val reportFilePath by viewModel.reportFilePath.collectAsState()
 
@@ -53,7 +56,14 @@ fun DetailsScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(title = { Text("Survey Details") })
+            TopAppBar(
+                title = { Text("Survey Details") },
+                actions = {
+                    IconButton(onClick = { onModifyClick(surveyId) }) {
+                        Icon(painterResource(id = R.drawable.baseline_edit_24), contentDescription = "Modify Survey")
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { 
@@ -64,6 +74,8 @@ fun DetailsScreen(
         }
     ) {
         if (surveyWithPhotos != null) {
+            val (originalPhotos, overlaidPhotos) = surveyWithPhotos.photos.partition { !it.isSuperimposed }
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -76,35 +88,39 @@ fun DetailsScreen(
                 Text("Address: ${surveyWithPhotos.survey.siteAddress}", style = MaterialTheme.typography.bodyLarge)
                 Text("Gate Type: ${surveyWithPhotos.survey.gateType}", style = MaterialTheme.typography.bodyLarge)
                 
-                // Dimensions
-                Text("Dimensions", style = MaterialTheme.typography.titleMedium)
-                Text("Clear Opening Width: ${surveyWithPhotos.survey.dimensions.clearOpeningWidth} m")
-                Text("Required Height: ${surveyWithPhotos.survey.dimensions.requiredHeight} m")
-                surveyWithPhotos.survey.dimensions.parkingSpaceLength?.let {
-                    Text("Parking Space Length: $it m")
-                }
-                surveyWithPhotos.survey.dimensions.openingAngleLeaf?.let {
-                    Text("Opening Angle: $it degrees")
-                }
+                // Dimensions & Provisions sections...
 
-                // Provisions
-                Text("Provisions", style = MaterialTheme.typography.titleMedium)
-                Text("Cabling: ${if (surveyWithPhotos.survey.provisions.hasCabling) "Yes" else "No"}")
-                Text("Storage: ${if (surveyWithPhotos.survey.provisions.hasStorage) "Yes" else "No"}")
-
-                // Photos
-                if (surveyWithPhotos.photos.isNotEmpty()) {
-                    Text("Photos", style = MaterialTheme.typography.titleMedium)
+                // Original Photos
+                if (originalPhotos.isNotEmpty()) {
+                    Text("Original Photos", style = MaterialTheme.typography.titleMedium)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(surveyWithPhotos.photos) { photo ->
+                        items(originalPhotos) { photo ->
                             Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = photo.localFilePath,
-                                    placeholder = painterResource(id = R.drawable.baseline_image_24),
-                                    error = painterResource(id = R.drawable.baseline_broken_image_24)
-                                ),
-                                contentDescription = "Captured photo",
-                                modifier = Modifier.size(150.dp),
+                                painter = rememberAsyncImagePainter(model = photo.localFilePath),
+                                contentDescription = "Original photo",
+                                modifier = Modifier
+                                    .size(150.dp)
+                                    .clickable { onPhotoClick(surveyId, photo.photoId) },
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+
+                // Overlaid Photos
+                if (overlaidPhotos.isNotEmpty()) {
+                    Text("Overlaid Photos", style = MaterialTheme.typography.titleMedium)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(overlaidPhotos) { index, photo ->
+                            Image(
+                                painter = rememberAsyncImagePainter(model = photo.localFilePath),
+                                contentDescription = "Overlaid photo",
+                                modifier = Modifier
+                                    .size(150.dp)
+                                    .clickable { 
+                                        val paths = overlaidPhotos.map { it.localFilePath }
+                                        onOverlaidPhotoClick(paths, index)
+                                    },
                                 contentScale = ContentScale.Crop
                             )
                         }

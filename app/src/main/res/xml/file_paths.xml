@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <files-path name="my_images" path="."/>
+    <!-- Use external-files-path for images. It's a more standard and reliable location
+         for app-specific media files that don't require storage permissions.
+         The path points to Android/data/com.a1.sitesync/files/Pictures/ -->
+    <external-files-path name="my_images" path="Pictures" />
     <external-cache-path name="my_reports" path="." />
 </paths>

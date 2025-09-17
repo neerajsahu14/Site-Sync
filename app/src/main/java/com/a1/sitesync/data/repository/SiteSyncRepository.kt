@@ -1,5 +1,7 @@
 package com.a1.sitesync.data.repository
 
+import android.content.Context
+import androidx.core.content.FileProvider
 import com.a1.sitesync.data.database.dao.SurveyDao
 import com.a1.sitesync.data.database.model.Dimensions
 import com.a1.sitesync.data.database.model.Photo
@@ -19,6 +21,7 @@ import java.util.Date
 import java.util.UUID
 
 class SiteSyncRepository(
+    private val context: Context,
     private val surveyDao: SurveyDao,
     private val firebaseService: FirebaseSyncService,
     private val firebaseSyncRepository: FirebaseSyncRepository
@@ -93,7 +96,8 @@ class SiteSyncRepository(
 
         val uploadedPhotos = photos.map { photo ->
             val localFile = File(photo.localFilePath)
-            val cloudUrl = firebaseService.uploadFile(localFile, survey.surveyId)
+            val fileUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", localFile)
+            val cloudUrl = firebaseService.uploadFile(fileUri, survey.surveyId, localFile.name)
             SurveyPhoto(
                 photoId = photo.photoId,
                 cloudStorageUrl = cloudUrl,
@@ -155,15 +159,26 @@ class SiteSyncRepository(
                 isSynced = true,
                 createdAt = fs.createdAt ?: Date()
             )
-            val photos = fs.photos.map { sp ->
-                Photo(
-                    photoId = sp.photoId,
-                    surveyIdRef = fs.surveyId,
-                    localFilePath = "",
-                    cloudStorageUrl = sp.cloudStorageUrl,
-                    isSuperimposed = sp.isSuperimposed,
-                    capturedAt = sp.capturedAt
-                )
+
+            val photos = fs.photos.mapNotNull { sp ->
+                if (sp.cloudStorageUrl.isNotBlank()) {
+                    try {
+                        val localFile = firebaseService.downloadFile(sp.cloudStorageUrl)
+                        Photo(
+                            photoId = sp.photoId,
+                            surveyIdRef = fs.surveyId,
+                            localFilePath = localFile.absolutePath,
+                            cloudStorageUrl = sp.cloudStorageUrl,
+                            isSuperimposed = sp.isSuperimposed,
+                            capturedAt = sp.capturedAt
+                        )
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        null // Skip this photo if download fails
+                    }
+                } else {
+                    null // Skip this photo if the URL is blank
+                }
             }
             surveyDao.insertSurveyWithPhotos(survey, photos)
         }
@@ -177,6 +192,8 @@ class SiteSyncRepository(
 
     suspend fun deleteSurvey(survey: Survey) = surveyDao.deleteSurvey(survey)
 
+    suspend fun deletePhotoById(photoId: String) = surveyDao.deletePhotoById(photoId)
+
     suspend fun upsertSurveyOnline(firestoreSurvey: FirestoreSurvey) =
         firebaseSyncRepository.upsertSurvey(firestoreSurvey)
 
@@ -189,13 +206,13 @@ class SiteSyncRepository(
     suspend fun deleteSurveyOnline(surveyId: String) =
         firebaseSyncRepository.deleteSurvey(surveyId)
 
-    suspend fun addPhotoToSurvey(surveyId: String, localFilePath: String) {
+    suspend fun addPhotoToSurvey(surveyId: String, localFilePath: String, isSuperimposed: Boolean) {
         val photo = Photo(
             photoId = UUID.randomUUID().toString(),
             surveyIdRef = surveyId,
             localFilePath = localFilePath,
             cloudStorageUrl = null,
-            isSuperimposed = false,
+            isSuperimposed = isSuperimposed,
             capturedAt = Date()
         )
         surveyDao.insertPhotos(listOf(photo))

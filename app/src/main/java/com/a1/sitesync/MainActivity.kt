@@ -9,25 +9,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.a1.sitesync.ui.theme.SiteSyncTheme
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.a1.sitesync.ui.screen.CameraScreen
-import com.a1.sitesync.ui.screen.DetailsScreen
-import com.a1.sitesync.ui.screen.FormScreen
-import com.a1.sitesync.ui.screen.OverlayScreen
-import com.a1.sitesync.ui.screen.PreviewScreen
-import com.a1.sitesync.ui.screen.SyncScreen
-import com.a1.sitesync.ui.screen.SurveyListScreen
 import androidx.navigation.navArgument
-import androidx.navigation.NavType
 import com.a1.sitesync.data.repository.AuthRepository
-import com.a1.sitesync.ui.screen.AuthScreen
+import com.a1.sitesync.ui.screen.*
+import com.a1.sitesync.ui.theme.SiteSyncTheme
 import com.a1.sitesync.ui.viewmodel.SiteSyncViewModel
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 class MainActivity : ComponentActivity() {
 
@@ -39,13 +34,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             SiteSyncTheme {
                 val navController = rememberNavController()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    SiteSyncNavHost(
-                        navController = navController,
-                        modifier = Modifier.padding(innerPadding),
-                        authRepository = authRepository
-                    )
-                }
+                SiteSyncNavHost(
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize(),
+                    authRepository = authRepository
+                )
             }
         }
     }
@@ -53,7 +46,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SiteSyncNavHost(
-    navController: NavHostController, 
+    navController: NavHostController,
     modifier: Modifier = Modifier,
     authRepository: AuthRepository
 ) {
@@ -72,14 +65,15 @@ fun SiteSyncNavHost(
             SurveyListScreen(
                 onAddNew = { navController.navigate("form/new") },
                 onItemClick = { id -> navController.navigate("details/$id") },
+                onEditClick = { id -> navController.navigate("form/$id") },
                 onSyncClick = { surveyId -> siteSyncViewModel.syncSurveyById(surveyId) }
             )
         }
-        composable("form") { 
+        composable("form") {
             FormScreen(
-                onNext = { navController.navigate("camera") },
+                surveyId = null,
                 onSaveComplete = { navController.popBackStack() }
-            ) 
+            )
         }
         composable(
             route = "form/{surveyId}",
@@ -87,7 +81,6 @@ fun SiteSyncNavHost(
         ) { backStackEntry ->
             val surveyId = backStackEntry.arguments?.getString("surveyId")
             FormScreen(
-                onNext = { id -> navController.navigate("camera/$id") }, 
                 surveyId = surveyId,
                 onSaveComplete = { navController.popBackStack() }
             )
@@ -97,30 +90,59 @@ fun SiteSyncNavHost(
             arguments = listOf(navArgument("surveyId") { type = NavType.StringType })
         ) { backStackEntry ->
             val surveyId = backStackEntry.arguments?.getString("surveyId")
-            requireNotNull(surveyId) { "surveyId parameter wasn't found. Please make sure it's set!" }
-            DetailsScreen(surveyId = surveyId)
+            requireNotNull(surveyId) { "surveyId parameter wasn't found." }
+            DetailsScreen(
+                surveyId = surveyId,
+                onModifyClick = { id -> navController.navigate("form/$id") },
+                onPhotoClick = { sId, pId -> navController.navigate("overlay/$sId/$pId") },
+                onOverlaidPhotoClick = { paths, index ->
+                    val encodedPaths = URLEncoder.encode(paths.joinToString(","), "UTF-8")
+                    navController.navigate("fullScreenViewer/$encodedPaths/$index")
+                }
+            )
         }
         composable(
             route = "camera/{surveyId}",
             arguments = listOf(navArgument("surveyId") { type = NavType.StringType })
         ) { backStackEntry ->
             val surveyId = backStackEntry.arguments?.getString("surveyId") ?: ""
-            CameraScreen(onNext = { id -> navController.navigate("overlay/$id") }, surveyId = surveyId)
+            CameraScreen(
+                surveyId = surveyId,
+                onNext = { sId -> navController.navigate("details/$sId") { popUpTo("list") } }
+            )
         }
         composable(
-            route = "overlay/{surveyId}",
-            arguments = listOf(navArgument("surveyId") { type = NavType.StringType })
+            route = "overlay/{surveyId}/{photoId}",
+            arguments = listOf(
+                navArgument("surveyId") { type = NavType.StringType },
+                navArgument("photoId") { type = NavType.StringType }
+            )
         ) { backStackEntry ->
-            val surveyId = backStackEntry.arguments?.getString("surveyId") ?: ""
-            OverlayScreen(onNext = { id -> navController.navigate("preview/$id") }, surveyId = surveyId)
+            val surveyId = backStackEntry.arguments?.getString("surveyId")
+            val photoId = backStackEntry.arguments?.getString("photoId")
+            requireNotNull(surveyId) { "surveyId parameter wasn't found." }
+            requireNotNull(photoId) { "photoId parameter wasn't found." }
+            OverlayScreen(
+                surveyId = surveyId,
+                photoId = photoId,
+                onBack = { navController.popBackStack() }
+            )
         }
         composable(
-            route = "preview/{surveyId}",
-            arguments = listOf(navArgument("surveyId") { type = NavType.StringType })
+            route = "fullScreenViewer/{imagePaths}/{initialPage}",
+            arguments = listOf(
+                navArgument("imagePaths") { type = NavType.StringType },
+                navArgument("initialPage") { type = NavType.IntType }
+            )
         ) { backStackEntry ->
-            val surveyId = backStackEntry.arguments?.getString("surveyId") ?: ""
-            PreviewScreen(onNext = { navController.navigate("sync") }, surveyId = surveyId)
+            val imagePathsStr = backStackEntry.arguments?.getString("imagePaths") ?: ""
+            val initialPage = backStackEntry.arguments?.getInt("initialPage") ?: 0
+            val decodedPaths = URLDecoder.decode(imagePathsStr, "UTF-8").split(",")
+            FullScreenImageViewer(
+                imagePaths = decodedPaths,
+                initialPage = initialPage,
+                onBack = { navController.popBackStack() }
+            )
         }
-        composable("sync") { SyncScreen(onBack = { navController.popBackStack() }) }
     }
 }

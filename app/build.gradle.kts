@@ -38,6 +38,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // Ensure BuildConfig is generated
     }
 }
 
@@ -58,12 +59,11 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.storage.ktx)
-    implementation(libs.firebase.appcheck.playintegrity)
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
 
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
-    implementation(libs.play.services.location)
 
 
     implementation(libs.androidx.room.runtime)

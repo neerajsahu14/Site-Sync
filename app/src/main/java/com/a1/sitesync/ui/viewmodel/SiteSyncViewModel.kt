@@ -57,6 +57,10 @@ class SiteSyncViewModel(
         repository.deleteSurvey(survey)
     }
 
+    fun deletePhotoById(photoId: String) = viewModelScope.launch {
+        repository.deletePhotoById(photoId)
+    }
+
     fun syncData() = viewModelScope.launch {
         repository.performDataSync()
     }
@@ -141,7 +145,7 @@ class SiteSyncViewModel(
         }
     }
 
-    fun addPhotoToSurvey(surveyId: String, localFilePath: String) = viewModelScope.launch {
-        repository.addPhotoToSurvey(surveyId, localFilePath)
+    fun addPhotoToSurvey(surveyId: String, localFilePath: String, isSuperimposed: Boolean = false) = viewModelScope.launch {
+        repository.addPhotoToSurvey(surveyId, localFilePath, isSuperimposed)
     }
 }

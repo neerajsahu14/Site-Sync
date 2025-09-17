@@ -43,4 +43,7 @@ interface SurveyDao {
 
     @Update
     suspend fun updatePhotos(photos: List<Photo>)
+
+    @Query("DELETE FROM photos WHERE photo_id = :photoId")
+    suspend fun deletePhotoById(photoId: String)
 }
